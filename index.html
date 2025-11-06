@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Face Recognition</title>
+
+<style>
+  * {
+    margin: 0; padding: 0;
+    font-family: Arial, sans-serif;
+    box-sizing: border-box;
+  }
+  body {
+    background: #111;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    flex-direction: column;
+  }
+  header {
+    width: 100%;
+    padding: 20px;
+    text-align: center;
+    background: #222;
+    font-size: 22px;
+    font-weight: bold;
+    border-bottom: 2px solid #333;
+    position: fixed;
+    top: 0;
+    color: #0ff;
+  }
+  .video-container {
+    position: relative;
+    margin-top: 80px;
+  }
+  video {
+    width: 720px;
+    height: 560px;
+    border-radius: 16px;
+    border: 3px solid #0ff;
+  }
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  footer {
+    margin-top: 20px;
+    color: #aaa;
+    font-size: 14px;
+  }
+</style>
+
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script defer>
+window.onload = () => {
+  const video = document.getElementById('video');
+
+  Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+    faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+    faceapi.nets.faceLandmark68Net.loadFromUri('/models')
+  ]).then(startVideo);
+
+  function startVideo() {
+    navigator.mediaDevices.getUserMedia({ video: {} })
+      .then(stream => video.srcObject = stream)
+      .catch(err => console.error("Camera Error", err));
+  }
+
+  const images = ['Amarjeetsir.jpg', 'Abhishek.jpg']; 
+
+  async function createLabeledDescriptors() {
+    const labeledDescriptors = [];
+    for (const imgName of images) {
+      const img = await faceapi.fetchImage(`/known/${imgName}`);
+      const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (det) {
+        const name = imgName.split('.')[0];
+        labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(name, [det.descriptor]));
+      }
+    }
+    return labeledDescriptors;
+  }
+
+  video.addEventListener('loadedmetadata', async () => {
+  const canvas = faceapi.createCanvasFromMedia(video);
+  document.querySelector('.video-container').append(canvas);
+
+  const displaySize = { width: video.videoWidth, height: video.videoHeight };
+  faceapi.matchDimensions(canvas, displaySize);
+
+  const labeled = await createLabeledDescriptors();
+  const faceMatcher = new faceapi.FaceMatcher(labeled, 0.6);
+
+  setInterval(async () => {
+    const dets = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+    .withFaceLandmarks()
+    .withFaceDescriptors();
+
+    const resized = faceapi.resizeResults(dets, displaySize);
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+    resized.forEach(d => {
+      const match = faceMatcher.findBestMatch(d.descriptor);
+      new faceapi.draw.DrawBox(d.detection.box, {
+        label: match.toString(),
+        boxColor: '#0ff'
+      }).draw(canvas);
+    });
+  }, 200);
+});
+
+};
+</script>
+</head>
+
+<body>
+<header>🔹 Face Recognition System</header>
+
+<div class="video-container">
+  <video id="video" autoplay muted></video>
+</div>
+
+<footer>Developed by You ✅</footer>
+
+</body>
+</html>
